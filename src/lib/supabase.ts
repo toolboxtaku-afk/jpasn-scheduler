@@ -11,7 +11,7 @@ export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 let supabase: SupabaseClient;
 
 if (isSupabaseConfigured) {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    supabase = createClient(supabaseUrl!, supabaseAnonKey!);
 } else {
     // ダミーURLでクライアントを作成（実際のリクエストは失敗するがクラッシュしない）
     console.warn(
