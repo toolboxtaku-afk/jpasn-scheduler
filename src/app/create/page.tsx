@@ -344,7 +344,8 @@ export default function CreatePage() {
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    if (window.confirm(`「${meeting.title}」を履歴から削除しますか？`)) {
+                                                    const displayTitle = meeting.title || '名称なし';
+                                                    if (window.confirm(`「${displayTitle}」を履歴から削除しますか？`)) {
                                                         removeMeeting(meeting.eventId);
                                                         setMeetingHistory(getMeetings());
                                                     }
