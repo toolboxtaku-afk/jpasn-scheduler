@@ -344,8 +344,10 @@ export default function CreatePage() {
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    removeMeeting(meeting.eventId);
-                                                    setMeetingHistory(getMeetings());
+                                                    if (window.confirm(`「${meeting.title}」を履歴から削除しますか？`)) {
+                                                        removeMeeting(meeting.eventId);
+                                                        setMeetingHistory(getMeetings());
+                                                    }
                                                 }}
                                                 className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                                 title="履歴から削除"
