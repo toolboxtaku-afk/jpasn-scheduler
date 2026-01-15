@@ -110,7 +110,7 @@ export default function DateTimePicker({
                     const end = new Date(busy.end);
                     return `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}〜${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
                 }).join('、');
-                setConflictWarning(`${conflictTimes}は、すでにJPASNの他の予定が入っています。可能な限り候補から外してください。`);
+                setConflictWarning(`${conflictTimes}は、すでにJPASNの他の予定が入っています。既存予定を含まない時間帯を選択してください。`);
                 return;
             }
             setConflictWarning(null);
