@@ -1,15 +1,15 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { CalendarBlank, Users, SpinnerGap, Check, Copy, Clock, ChartBar, ArrowLeft, Plus, GoogleLogo, LinkBreak } from '@phosphor-icons/react';
+import { useRouter } from 'next/navigation';
+import { CalendarBlank, Users, SpinnerGap, Check, Copy, Clock, ChartBar, Plus, CalendarCheck } from '@phosphor-icons/react';
 import Header from '@/components/Header';
 import DateTimePicker from '@/components/DateTimePicker';
 import { useRealtimeEvent } from '@/hooks/useRealtimeEvent';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import * as demoStore from '@/lib/demoStore';
 import { Event } from '@/types/database';
-import { saveGoogleToken, removeGoogleToken, isGoogleConnected, fetchBusyTimes, BusyTime } from '@/lib/googleCalendar';
+import { fetchBusyTimes, BusyTime } from '@/lib/googleCalendar';
 
 interface SelectedDate {
     date: string;
@@ -21,7 +21,6 @@ export default function EditPage({ params }: { params: Promise<{ event_id: strin
     const resolvedParams = use(params);
     const eventId = resolvedParams.event_id;
     const router = useRouter();
-    const searchParams = useSearchParams();
 
     const [event, setEvent] = useState<Event | null>(null);
     const [copiedParticipant, setCopiedParticipant] = useState(false);
@@ -29,27 +28,26 @@ export default function EditPage({ params }: { params: Promise<{ event_id: strin
     const [eventError, setEventError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [selectedDates, setSelectedDates] = useState<SelectedDate[]>([]);
-    const [googleConnected, setGoogleConnected] = useState(false);
     const [busyTimes, setBusyTimes] = useState<BusyTime[]>([]);
     const [selectedDateForBusy, setSelectedDateForBusy] = useState<string | null>(null);
+    const [calendarConnected, setCalendarConnected] = useState(false);
 
     const { options, loading: optionsLoading } = useRealtimeEvent(eventId);
 
-    // OAuth callback からトークンを取得・保存
-    useEffect(() => {
-        const token = searchParams.get('google_token');
-        const expiresIn = searchParams.get('google_expires_in');
-        const refreshToken = searchParams.get('google_refresh_token');
-
-        if (token && expiresIn) {
-            saveGoogleToken(token, parseInt(expiresIn), refreshToken || undefined);
-            setGoogleConnected(true);
-            // URLからパラメータを削除
-            router.replace(`/${eventId}/edit`);
-        } else {
-            setGoogleConnected(isGoogleConnected());
+    // iCal連携が有効かチェック（初回の日付選択時に確認）
+    const checkCalendarConnection = async () => {
+        try {
+            // テスト用に今日の日付でAPIを叩いてみる
+            const today = new Date().toISOString().split('T')[0];
+            const times = await fetchBusyTimes(today);
+            // 結果が返ってきたら（空配列でも）接続成功とみなす
+            setCalendarConnected(true);
+            return true;
+        } catch {
+            setCalendarConnected(false);
+            return false;
         }
-    }, [searchParams, eventId, router]);
+    };
 
     // イベント情報を取得
     useEffect(() => {
@@ -281,44 +279,18 @@ export default function EditPage({ params }: { params: Promise<{ event_id: strin
                     </div>
                 </div>
 
-                {/* Googleカレンダー連携 */}
-                <div className="bg-white rounded-2xl shadow-lg p-4 mb-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <GoogleLogo size={24} weight="bold" className={googleConnected ? 'text-green-600' : 'text-gray-400'} />
-                            <span className="font-bold text-gray-700">
-                                {googleConnected ? 'Googleカレンダー連携中' : 'Googleカレンダー'}
-                            </span>
+                {/* カレンダー既存予定表示 */}
+                {calendarConnected && busyTimes.length > 0 && (
+                    <div className="bg-green-50 rounded-xl p-4 mb-6 border border-green-200">
+                        <div className="flex items-center gap-2 mb-2">
+                            <CalendarCheck size={20} weight="fill" className="text-green-600" />
+                            <span className="text-sm font-bold text-green-700">カレンダー連携中</span>
                         </div>
-                        {googleConnected ? (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    removeGoogleToken();
-                                    setGoogleConnected(false);
-                                    setBusyTimes([]);
-                                }}
-                                className="px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
-                            >
-                                <LinkBreak size={16} />
-                                連携解除
-                            </button>
-                        ) : (
-                            <a
-                                href={`/api/auth/google?returnTo=/${eventId}/edit`}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex items-center gap-2"
-                            >
-                                <GoogleLogo size={18} weight="bold" />
-                                連携する
-                            </a>
-                        )}
-                    </div>
-                    {googleConnected && (
-                        <p className="text-xs text-gray-500 mt-2">
-                            既存の予定を自動で除外して候補日を設定できます
+                        <p className="text-xs text-green-600">
+                            既存の予定がある時間帯は自動的に表示されます
                         </p>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 {/* 候補日設定 */}
                 <div className="mb-6">
@@ -331,12 +303,16 @@ export default function EditPage({ params }: { params: Promise<{ event_id: strin
                         onAdd={handleAddDate}
                         onRemove={handleRemoveDate}
                         busyTimes={busyTimes}
-                        isGoogleConnected={googleConnected}
+                        isGoogleConnected={calendarConnected}
                         onDateSelect={async (dateStr) => {
-                            if (googleConnected && dateStr !== selectedDateForBusy) {
+                            if (dateStr !== selectedDateForBusy) {
                                 setSelectedDateForBusy(dateStr);
                                 const times = await fetchBusyTimes(dateStr);
                                 setBusyTimes(times);
+                                if (times.length > 0 || !calendarConnected) {
+                                    // 接続確認（初回のみ）
+                                    await checkCalendarConnection();
+                                }
                             }
                         }}
                     />

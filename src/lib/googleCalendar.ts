@@ -68,9 +68,37 @@ export function isGoogleConnected(): boolean {
 }
 
 /**
- * 指定した日付範囲のbusy時間を取得
+ * 指定した日付範囲のbusy時間を取得（iCal URL経由）
+ * 環境変数 ICAL_URL が設定されている場合に使用
  */
 export async function fetchBusyTimes(dateStr: string): Promise<BusyTime[]> {
+    try {
+        const response = await fetch('/api/ical', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ date: dateStr }),
+        });
+
+        if (!response.ok) {
+            console.error('Failed to fetch busy times from iCal');
+            return [];
+        }
+
+        const data = await response.json();
+        return data.busyTimes || [];
+    } catch (err) {
+        console.error('Error fetching busy times:', err);
+        return [];
+    }
+}
+
+/**
+ * 指定した日付範囲のbusy時間を取得（Google OAuth経由 - レガシー）
+ * @deprecated OAuth審査が必要なため、iCal版のfetchBusyTimesを使用してください
+ */
+export async function fetchBusyTimesOAuth(dateStr: string): Promise<BusyTime[]> {
     const token = getGoogleToken();
     if (!token) return [];
 
