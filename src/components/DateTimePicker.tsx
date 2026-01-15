@@ -37,6 +37,7 @@ export default function DateTimePicker({
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [startTime, setStartTime] = useState('10:00');
     const [endTime, setEndTime] = useState('18:00');
+    const [conflictWarning, setConflictWarning] = useState<string | null>(null);
 
     // カレンダーの日付を生成
     const getDaysInMonth = (year: number, month: number) => {
@@ -83,8 +84,36 @@ export default function DateTimePicker({
         onDateSelect?.(dateStr);
     };
 
+    // 重複する予定の時間帯を取得
+    const getConflictingBusyTimes = () => {
+        if (!selectedDate) return [];
+        const [year, month, day] = selectedDate.split('-').map(Number);
+        const [startHour, startMinute] = startTime.split(':').map(Number);
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+        const rangeStart = new Date(year, month - 1, day, startHour, startMinute).getTime();
+        const rangeEnd = new Date(year, month - 1, day, endHour, endMinute).getTime();
+
+        return busyTimes.filter(busy => {
+            const busyStart = new Date(busy.start).getTime();
+            const busyEnd = new Date(busy.end).getTime();
+            return rangeStart < busyEnd && rangeEnd > busyStart;
+        });
+    };
+
     const handleAddDateTime = () => {
         if (selectedDate) {
+            const conflicts = getConflictingBusyTimes();
+            if (conflicts.length > 0) {
+                // 重複する時間帯をフォーマット
+                const conflictTimes = conflicts.map(busy => {
+                    const start = new Date(busy.start);
+                    const end = new Date(busy.end);
+                    return `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}〜${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+                }).join('、');
+                setConflictWarning(`${conflictTimes}は、すでにJPASNの他の予定が入っています。可能な限り候補から外してください。`);
+                return;
+            }
+            setConflictWarning(null);
             onAdd(selectedDate, startTime, endTime);
             setSelectedDate(null);
         }
@@ -291,6 +320,16 @@ export default function DateTimePicker({
                                 </div>
                             );
                         })()}
+
+                        {/* 重複エラーメッセージ */}
+                        {conflictWarning && (
+                            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded mt-3">
+                                <div className="flex items-start gap-2">
+                                    <Warning size={20} weight="fill" className="flex-shrink-0 mt-0.5" />
+                                    <p className="text-sm font-bold">{conflictWarning}</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <button
