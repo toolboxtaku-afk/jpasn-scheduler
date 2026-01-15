@@ -1,12 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { CaretLeft, CaretRight, Plus, X, Clock } from '@phosphor-icons/react';
+import { CaretLeft, CaretRight, Plus, X, Clock, Warning } from '@phosphor-icons/react';
+import { BusyTime, formatBusyTimes } from '@/lib/googleCalendar';
 
 interface DateTimePickerProps {
     selectedDates: { date: string; time: string; endTime?: string }[];
     onAdd: (date: string, time: string, endTime?: string) => void;
     onRemove: (index: number) => void;
+    busyTimes?: BusyTime[];
+    isGoogleConnected?: boolean;
+    onDateSelect?: (dateStr: string) => void;
 }
 
 // 時間オプション（9:00〜22:00、30分単位）
@@ -21,6 +25,9 @@ export default function DateTimePicker({
     selectedDates,
     onAdd,
     onRemove,
+    busyTimes = [],
+    isGoogleConnected = false,
+    onDateSelect,
 }: DateTimePickerProps) {
     const today = new Date();
     // 翌月をデフォルト表示
@@ -73,6 +80,7 @@ export default function DateTimePicker({
     const handleSelectDate = (day: number) => {
         const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         setSelectedDate(dateStr);
+        onDateSelect?.(dateStr);
     };
 
     const handleAddDateTime = () => {
@@ -245,12 +253,44 @@ export default function DateTimePicker({
                             </select>
                         </div>
 
+                        {/* Googleカレンダーのbusy時間帯表示 */}
+                        {isGoogleConnected && busyTimes.length > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                                <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-1">
+                                    <Warning size={18} weight="fill" />
+                                    この日の既存予定
+                                </div>
+                                <div className="text-red-600 text-sm">
+                                    {formatBusyTimes(busyTimes).map((time, i) => (
+                                        <span key={i} className="inline-block bg-red-100 px-2 py-1 rounded mr-2 mb-1">
+                                            {time}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* 選択中の時間帯プレビュー */}
-                        <div className="bg-blue-50 rounded-xl p-3 text-center">
-                            <span className="text-lg font-bold text-blue-700">
-                                {startTime} 〜 {endTime} の間で調整
-                            </span>
-                        </div>
+                        {(() => {
+                            const hasConflict = selectedDate && busyTimes.some(busy => {
+                                const [year, month, day] = selectedDate.split('-').map(Number);
+                                const [startHour, startMinute] = startTime.split(':').map(Number);
+                                const [endHour, endMinute] = endTime.split(':').map(Number);
+                                const rangeStart = new Date(year, month - 1, day, startHour, startMinute).getTime();
+                                const rangeEnd = new Date(year, month - 1, day, endHour, endMinute).getTime();
+                                const busyStart = new Date(busy.start).getTime();
+                                const busyEnd = new Date(busy.end).getTime();
+                                return rangeStart < busyEnd && rangeEnd > busyStart;
+                            });
+                            return (
+                                <div className={`rounded-xl p-3 text-center ${hasConflict ? 'bg-orange-50 border border-orange-200' : 'bg-blue-50'}`}>
+                                    <span className={`text-lg font-bold ${hasConflict ? 'text-orange-700' : 'text-blue-700'}`}>
+                                        {startTime} 〜 {endTime} の間で調整
+                                        {hasConflict && ' ⚠️ 予定と重複'}
+                                    </span>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <button
