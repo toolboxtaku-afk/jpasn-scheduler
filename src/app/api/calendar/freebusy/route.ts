@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 
+// 環境変数で指定されたカレンダーIDを使用（未設定の場合は'primary'）
+const DEFAULT_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { accessToken, timeMin, timeMax, calendarId = 'primary' } = body;
+        const { accessToken, timeMin, timeMax, calendarId = DEFAULT_CALENDAR_ID } = body;
 
         if (!accessToken) {
             return NextResponse.json(
