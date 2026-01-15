@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, Link as LinkIcon, Copy, Check, Clock, ChartBar, PencilSimple, Users } from '@phosphor-icons/react';
+import { CalendarPlus, Link as LinkIcon, Copy, Check, Clock, ChartBar, PencilSimple, Users, Trash, ArrowSquareOut, ClockCountdown } from '@phosphor-icons/react';
 import Header from '@/components/Header';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import * as demoStore from '@/lib/demoStore';
+import { getMeetings, saveMeeting, removeMeeting, getRemainingDays, MeetingHistoryItem } from '@/lib/meetingHistory';
 
 export default function CreatePage() {
     const router = useRouter();
@@ -16,6 +17,12 @@ export default function CreatePage() {
     const [copiedLeader, setCopiedLeader] = useState(false);
     const [copiedParticipant, setCopiedParticipant] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [meetingHistory, setMeetingHistory] = useState<MeetingHistoryItem[]>([]);
+
+    // 会議履歴を読み込み
+    useEffect(() => {
+        setMeetingHistory(getMeetings());
+    }, []);
 
     const DURATION_OPTIONS = [
         { value: 30, label: '30分' },
@@ -52,6 +59,10 @@ export default function CreatePage() {
                 const event = demoStore.createEvent(title.trim(), duration);
                 eventId = event.id;
             }
+
+            // 会議履歴に保存
+            saveMeeting(eventId, title.trim(), duration);
+            setMeetingHistory(getMeetings());
 
             // 成功したらURLを表示
             setCreatedEventId(eventId);
@@ -310,6 +321,78 @@ export default function CreatePage() {
                         </>
                     )}
                 </button>
+
+                {/* 最近作成した会議 */}
+                {meetingHistory.length > 0 && (
+                    <div className="mt-8">
+                        <div className="flex items-center gap-2 mb-4">
+                            <ClockCountdown size={20} weight="fill" className="text-gray-500" />
+                            <h3 className="text-lg font-bold text-gray-700">最近作成した会議</h3>
+                        </div>
+                        <div className="space-y-3">
+                            {meetingHistory.map((meeting) => {
+                                const remainingDays = getRemainingDays(meeting.createdAt);
+                                return (
+                                    <div
+                                        key={meeting.eventId}
+                                        className="bg-white rounded-xl shadow-md p-4 border border-gray-100"
+                                    >
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                            <h4 className="font-bold text-gray-800 text-lg truncate flex-1">
+                                                {meeting.title}
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    removeMeeting(meeting.eventId);
+                                                    setMeetingHistory(getMeetings());
+                                                }}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="履歴から削除"
+                                            >
+                                                <Trash size={18} />
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-gray-500 mb-3">
+                                            {meeting.duration}分 • 残り{remainingDays}日で期限切れ
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push(`/${meeting.eventId}/edit`)}
+                                                className="flex-1 py-2 px-3 bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                            >
+                                                <PencilSimple size={16} weight="bold" />
+                                                候補日設定
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(`${window.location.origin}/${meeting.eventId}`);
+                                                }}
+                                                className="flex-1 py-2 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                            >
+                                                <Copy size={16} />
+                                                参加者URL
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push(`/${meeting.eventId}/admin`)}
+                                                className="py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                                                title="集計結果"
+                                            >
+                                                <ChartBar size={16} weight="fill" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3 text-center">
+                            ※ 履歴は作成から1週間後に自動的に削除されます
+                        </p>
+                    </div>
+                )}
             </main>
         </div>
     );
