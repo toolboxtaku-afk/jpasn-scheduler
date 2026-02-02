@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, Link as LinkIcon, Copy, Check, Clock, ChartBar, PencilSimple, Users, ArrowSquareOut, ClockCountdown } from '@phosphor-icons/react';
+import { CalendarPlus, Link as LinkIcon, Copy, Check, Clock, ChartBar, PencilSimple, Users, ArrowSquareOut, ClockCountdown, Trash } from '@phosphor-icons/react';
 import Header from '@/components/Header';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import * as demoStore from '@/lib/demoStore';
@@ -373,8 +373,8 @@ export default function CreatePage() {
                                                     }
                                                 }}
                                                 className={`flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${copiedHistory[meeting.eventId]
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
                                                     }`}
                                             >
                                                 {copiedHistory[meeting.eventId] ? (
@@ -396,6 +396,49 @@ export default function CreatePage() {
                                                 title="集計結果"
                                             >
                                                 <ChartBar size={16} weight="fill" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    if (!confirm('この会議を削除してもよろしいですか？')) return;
+                                                    try {
+                                                        if (isSupabaseConfigured) {
+                                                            // 関連するレスポンスを先に削除
+                                                            const { data: options } = await supabase
+                                                                .from('options')
+                                                                .select('id')
+                                                                .eq('event_id', meeting.eventId);
+
+                                                            if (options && options.length > 0) {
+                                                                const optionIds = options.map(o => o.id);
+                                                                await supabase
+                                                                    .from('responses')
+                                                                    .delete()
+                                                                    .in('option_id', optionIds);
+
+                                                                await supabase
+                                                                    .from('options')
+                                                                    .delete()
+                                                                    .eq('event_id', meeting.eventId);
+                                                            }
+
+                                                            // イベントを削除
+                                                            await supabase
+                                                                .from('events')
+                                                                .delete()
+                                                                .eq('id', meeting.eventId);
+                                                        }
+                                                        // 履歴を再読み込み
+                                                        const meetings = await getMeetings();
+                                                        setMeetingHistory(meetings);
+                                                    } catch (err) {
+                                                        console.error('Failed to delete meeting:', err);
+                                                    }
+                                                }}
+                                                className="py-2 px-3 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
+                                                title="削除"
+                                            >
+                                                <Trash size={16} weight="fill" />
                                             </button>
                                         </div>
                                     </div>
