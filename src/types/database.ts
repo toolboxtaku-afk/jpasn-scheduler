@@ -36,6 +36,7 @@ export interface EventWithOptions extends Event {
 }
 
 // 時間スロットを生成するユーティリティ
+// 注: 終了時刻は「この時間帯まで選択可能」という意味で使用
 export function generateTimeSlots(startTime: string, endTime: string, durationMinutes: number): string[] {
   const slots: string[] = [];
   const [startHour, startMin] = startTime.split(':').map(Number);
@@ -44,8 +45,9 @@ export function generateTimeSlots(startTime: string, endTime: string, durationMi
   const startTotalMin = startHour * 60 + startMin;
   const endTotalMin = endHour * 60 + endMin;
 
-  // 会議時間分の余裕を持って終了
-  for (let min = startTotalMin; min + durationMinutes <= endTotalMin; min += 30) {
+  // 終了時刻まで30分刻みでスロットを生成
+  // 例: 10:00-21:00の場合、10:00〜20:30までのスロットを生成
+  for (let min = startTotalMin; min < endTotalMin; min += 30) {
     const hour = Math.floor(min / 60);
     const minute = min % 60;
     slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
