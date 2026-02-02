@@ -1,7 +1,8 @@
-// 会議履歴をローカルストレージで管理するユーティリティ
-// 作成した会議のURLを1週間保持し、自動的にクリーンアップ
+// 会議履歴をSupabaseから取得するユーティリティ
+// 全ての会議が全デバイスで共有されます
 
-const STORAGE_KEY = 'jpasn_meeting_history';
+import { supabase, isSupabaseConfigured } from './supabase';
+
 const RETENTION_DAYS = 7;
 
 export interface MeetingHistoryItem {
@@ -12,83 +13,42 @@ export interface MeetingHistoryItem {
 }
 
 /**
- * ローカルストレージから会議履歴を取得（期限切れのものは自動削除）
+ * Supabaseから会議履歴を取得（7日以内のもののみ）
  */
-export function getMeetings(): MeetingHistoryItem[] {
-    if (typeof window === 'undefined') {
-        return [];
-    }
+export async function getMeetings(): Promise<MeetingHistoryItem[]> {
+    const cutoffDate = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-        return [];
-    }
+    console.log('[MeetingHistory] isSupabaseConfigured:', isSupabaseConfigured);
+    console.log('[MeetingHistory] cutoffDate:', cutoffDate.toISOString());
 
-    try {
-        const meetings: MeetingHistoryItem[] = JSON.parse(stored);
-        const now = new Date();
-        const cutoffDate = new Date(now.getTime() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    if (isSupabaseConfigured) {
+        console.log('[MeetingHistory] Fetching from Supabase...');
+        const { data, error } = await supabase
+            .from('events')
+            .select('id, title, duration, created_at')
+            .gte('created_at', cutoffDate.toISOString())
+            .order('created_at', { ascending: false });
 
-        // 期限切れのものを除外
-        const validMeetings = meetings.filter(m => {
-            const createdAt = new Date(m.createdAt);
-            return createdAt > cutoffDate;
-        });
-
-        // 期限切れがあった場合は保存し直す
-        if (validMeetings.length !== meetings.length) {
-            saveMeetingsToStorage(validMeetings);
+        if (error) {
+            console.error('[MeetingHistory] Failed to fetch meetings:', error);
+            return [];
         }
 
-        // 新しい順にソート
-        return validMeetings.sort((a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-    } catch {
+        console.log('[MeetingHistory] Fetched data:', data);
+
+        return (data || []).map(event => ({
+            eventId: event.id,
+            title: event.title,
+            duration: event.duration || 60,
+            createdAt: event.created_at,
+        }));
+    } else {
+        console.log('[MeetingHistory] Demo mode - returning empty array');
+        // デモモード: ローカルストレージを使用
+        // Note: demoStore doesn't export getEvents, so we return empty array in demo mode
+        // Real Supabase mode will be used in production
         return [];
     }
-}
-
-/**
- * 新しい会議を履歴に保存
- */
-export function saveMeeting(eventId: string, title: string, duration: number): void {
-    if (typeof window === 'undefined') return;
-
-    const meetings = getMeetings();
-
-    // 同じイベントIDがある場合は更新しない（重複防止）
-    if (meetings.some(m => m.eventId === eventId)) {
-        return;
-    }
-
-    const newMeeting: MeetingHistoryItem = {
-        eventId,
-        title,
-        duration,
-        createdAt: new Date().toISOString(),
-    };
-
-    meetings.unshift(newMeeting); // 先頭に追加
-    saveMeetingsToStorage(meetings);
-}
-
-/**
- * 会議を履歴から手動削除
- */
-export function removeMeeting(eventId: string): void {
-    if (typeof window === 'undefined') return;
-
-    const meetings = getMeetings();
-    const filtered = meetings.filter(m => m.eventId !== eventId);
-    saveMeetingsToStorage(filtered);
-}
-
-/**
- * ローカルストレージに保存
- */
-function saveMeetingsToStorage(meetings: MeetingHistoryItem[]): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(meetings));
 }
 
 /**
