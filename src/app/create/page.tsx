@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, Link as LinkIcon, Copy, Check, Clock, ChartBar, PencilSimple, Users, Trash, ArrowSquareOut, ClockCountdown } from '@phosphor-icons/react';
+import { CalendarPlus, Link as LinkIcon, Copy, Check, Clock, ChartBar, PencilSimple, Users, ArrowSquareOut, ClockCountdown } from '@phosphor-icons/react';
 import Header from '@/components/Header';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import * as demoStore from '@/lib/demoStore';
-import { getMeetings, saveMeeting, removeMeeting, getRemainingDays, MeetingHistoryItem } from '@/lib/meetingHistory';
+import { getMeetings, getRemainingDays, MeetingHistoryItem } from '@/lib/meetingHistory';
 
 export default function CreatePage() {
     const router = useRouter();
@@ -18,10 +18,15 @@ export default function CreatePage() {
     const [copiedParticipant, setCopiedParticipant] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [meetingHistory, setMeetingHistory] = useState<MeetingHistoryItem[]>([]);
+    const [copiedHistory, setCopiedHistory] = useState<Record<string, boolean>>({});
 
     // 会議履歴を読み込み
     useEffect(() => {
-        setMeetingHistory(getMeetings());
+        const loadMeetings = async () => {
+            const meetings = await getMeetings();
+            setMeetingHistory(meetings);
+        };
+        loadMeetings();
     }, []);
 
     const DURATION_OPTIONS = [
@@ -60,9 +65,9 @@ export default function CreatePage() {
                 eventId = event.id;
             }
 
-            // 会議履歴に保存
-            saveMeeting(eventId, title.trim(), duration);
-            setMeetingHistory(getMeetings());
+            // 会議履歴を再読込（Supabaseで自動保存済み）
+            const updatedMeetings = await getMeetings();
+            setMeetingHistory(updatedMeetings);
 
             // 成功したらURLを表示
             setCreatedEventId(eventId);
@@ -327,7 +332,7 @@ export default function CreatePage() {
                     <div className="mt-8">
                         <div className="flex items-center gap-2 mb-4">
                             <ClockCountdown size={20} weight="fill" className="text-gray-500" />
-                            <h3 className="text-lg font-bold text-gray-700">最近作成した会議</h3>
+                            <h3 className="text-lg font-bold text-gray-700">最近の会議（チーム共通）</h3>
                         </div>
                         <div className="space-y-3">
                             {meetingHistory.map((meeting) => {
@@ -341,20 +346,6 @@ export default function CreatePage() {
                                             <h4 className="font-bold text-gray-800 text-lg truncate flex-1">
                                                 {meeting.title}
                                             </h4>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const displayTitle = meeting.title || '名称なし';
-                                                    if (window.confirm(`「${displayTitle}」を履歴から削除しますか？`)) {
-                                                        removeMeeting(meeting.eventId);
-                                                        setMeetingHistory(getMeetings());
-                                                    }
-                                                }}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="履歴から削除"
-                                            >
-                                                <Trash size={18} />
-                                            </button>
                                         </div>
                                         <div className="text-xs text-gray-500 mb-3">
                                             {meeting.duration}分 • 残り{remainingDays}日で期限切れ
@@ -370,13 +361,33 @@ export default function CreatePage() {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(`${window.location.origin}/${meeting.eventId}`);
+                                                onClick={async () => {
+                                                    try {
+                                                        await navigator.clipboard.writeText(`${window.location.origin}/${meeting.eventId}`);
+                                                        setCopiedHistory(prev => ({ ...prev, [meeting.eventId]: true }));
+                                                        setTimeout(() => {
+                                                            setCopiedHistory(prev => ({ ...prev, [meeting.eventId]: false }));
+                                                        }, 2000);
+                                                    } catch {
+                                                        // ignore
+                                                    }
                                                 }}
-                                                className="flex-1 py-2 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                                className={`flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${copiedHistory[meeting.eventId]
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                                                    }`}
                                             >
-                                                <Copy size={16} />
-                                                参加者URL
+                                                {copiedHistory[meeting.eventId] ? (
+                                                    <>
+                                                        <Check size={16} weight="bold" />
+                                                        コピー済み
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Copy size={16} />
+                                                        参加者URL
+                                                    </>
+                                                )}
                                             </button>
                                             <button
                                                 type="button"
@@ -392,7 +403,7 @@ export default function CreatePage() {
                             })}
                         </div>
                         <p className="text-xs text-gray-400 mt-3 text-center">
-                            ※ 履歴は作成から1週間後に自動的に削除されます
+                            ※ どのデバイスからでも同じ履歴が表示されます（1週間で自動削除）
                         </p>
                     </div>
                 )}
