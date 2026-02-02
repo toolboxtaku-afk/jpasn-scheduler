@@ -7,9 +7,10 @@ export interface BusyTime {
 
 /**
  * iCalデータをパースしてイベント一覧を取得
+ * 終日イベントはisAllDay: trueでマークされる
  */
-function parseICalEvents(icalData: string): { start: Date; end: Date }[] {
-    const events: { start: Date; end: Date }[] = [];
+function parseICalEvents(icalData: string): { start: Date; end: Date; isAllDay: boolean }[] {
+    const events: { start: Date; end: Date; isAllDay: boolean }[] = [];
 
     // VEVENTブロックを抽出
     const eventRegex = /BEGIN:VEVENT[\s\S]*?END:VEVENT/g;
@@ -18,11 +19,16 @@ function parseICalEvents(icalData: string): { start: Date; end: Date }[] {
     for (const block of eventBlocks) {
         let dtstart: Date | null = null;
         let dtend: Date | null = null;
+        let isAllDay = false;
 
         // DTSTARTを取得
         const dtstartMatch = block.match(/DTSTART[^:]*:(\d{8}T\d{6}Z?|\d{8})/);
         if (dtstartMatch) {
             dtstart = parseICalDate(dtstartMatch[1]);
+            // 終日イベントかどうか（日付のみで時刻がない場合）
+            if (dtstartMatch[1].length === 8) {
+                isAllDay = true;
+            }
         }
 
         // DTENDを取得
@@ -46,7 +52,12 @@ function parseICalEvents(icalData: string): { start: Date; end: Date }[] {
         }
 
         if (dtstart && dtend) {
-            events.push({ start: dtstart, end: dtend });
+            // 24時間以上の予定も終日イベントとして扱う
+            const durationMs = dtend.getTime() - dtstart.getTime();
+            if (durationMs >= 24 * 60 * 60 * 1000) {
+                isAllDay = true;
+            }
+            events.push({ start: dtstart, end: dtend, isAllDay });
         }
     }
 
@@ -129,6 +140,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
         const busyTimes: BusyTime[] = events
             .filter(event => {
+                // 終日イベントは重複チェックから除外
+                if (event.isAllDay) {
+                    return false;
+                }
                 // イベントが指定日と重複するかチェック
                 return event.start < dayEnd && event.end > dayStart;
             })
