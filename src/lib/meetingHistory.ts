@@ -18,11 +18,7 @@ export interface MeetingHistoryItem {
 export async function getMeetings(): Promise<MeetingHistoryItem[]> {
     const cutoffDate = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
-    console.log('[MeetingHistory] isSupabaseConfigured:', isSupabaseConfigured);
-    console.log('[MeetingHistory] cutoffDate:', cutoffDate.toISOString());
-
     if (isSupabaseConfigured) {
-        console.log('[MeetingHistory] Fetching from Supabase...');
         const { data, error } = await supabase
             .from('events')
             .select('id, title, duration, created_at')
@@ -30,11 +26,10 @@ export async function getMeetings(): Promise<MeetingHistoryItem[]> {
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error('[MeetingHistory] Failed to fetch meetings:', error);
+            console.error('Failed to fetch meetings:', error);
             return [];
         }
 
-        console.log('[MeetingHistory] Fetched data:', data);
 
         return (data || []).map(event => ({
             eventId: event.id,
@@ -43,7 +38,6 @@ export async function getMeetings(): Promise<MeetingHistoryItem[]> {
             createdAt: event.created_at,
         }));
     } else {
-        console.log('[MeetingHistory] Demo mode - returning empty array');
         // デモモード: ローカルストレージを使用
         // Note: demoStore doesn't export getEvents, so we return empty array in demo mode
         // Real Supabase mode will be used in production
