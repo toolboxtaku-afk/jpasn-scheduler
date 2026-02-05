@@ -411,28 +411,43 @@ export default function CreatePage() {
 
                                                             if (options && options.length > 0) {
                                                                 const optionIds = options.map(o => o.id);
-                                                                await supabase
+                                                                const { error: respError } = await supabase
                                                                     .from('responses')
                                                                     .delete()
                                                                     .in('option_id', optionIds);
 
-                                                                await supabase
+                                                                if (respError) {
+                                                                    console.error('Failed to delete responses:', respError);
+                                                                }
+
+                                                                const { error: optError } = await supabase
                                                                     .from('options')
                                                                     .delete()
                                                                     .eq('event_id', meeting.eventId);
+
+                                                                if (optError) {
+                                                                    console.error('Failed to delete options:', optError);
+                                                                }
                                                             }
 
                                                             // イベントを削除
-                                                            await supabase
+                                                            const { error: eventError } = await supabase
                                                                 .from('events')
                                                                 .delete()
                                                                 .eq('id', meeting.eventId);
+
+                                                            if (eventError) {
+                                                                console.error('Failed to delete event:', eventError);
+                                                                alert('会議の削除に失敗しました: ' + eventError.message);
+                                                                return;
+                                                            }
                                                         }
                                                         // 履歴を再読み込み
                                                         const meetings = await getMeetings();
                                                         setMeetingHistory(meetings);
                                                     } catch (err) {
                                                         console.error('Failed to delete meeting:', err);
+                                                        alert('会議の削除に失敗しました。');
                                                     }
                                                 }}
                                                 className="py-2 px-3 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
